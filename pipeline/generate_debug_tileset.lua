@@ -9,14 +9,16 @@ local SHEET_SIZE = TILE_SIZE * GRID
 local PHASES = 8
 local TILE_COUNT = GRID * GRID
 
--- Source-of-truth authoring layout: blob/RPG Maker rotational grouping.
--- slot -> logical marching case id.
-local BLOB_SLOT_TO_CASE = {
-  8, 6, 13, 12,
-  5, 14, 15, 11,
-  2, 3, 7, 9,
-  0, 4, 10, 1,
-}
+-- Slot -> logical marching case ID. Shared with export_from_aseprite.py;
+-- canonical values live in blob_layout.json (sibling to this script).
+local script_dir = app.fs.filePath(debug.getinfo(1, "S").source:sub(2))
+local layout_path = app.fs.joinPath(script_dir, "blob_layout.json")
+local layout_file = assert(io.open(layout_path, "r"), "Failed to open " .. layout_path)
+local layout_ok, BLOB_SLOT_TO_CASE = pcall(json.decode, layout_file:read("*a"))
+layout_file:close()
+if not layout_ok then
+  error("Failed to parse blob_layout.json: " .. tostring(BLOB_SLOT_TO_CASE))
+end
 
 local TWO_PI = math.pi * 2
 

@@ -46,7 +46,9 @@ TILE_ROWS = 4
 TILE_COUNT = TILE_COLUMNS * TILE_ROWS
 
 SOURCE_LAYOUT_SLOT_TO_CASE = {
-    "blob": [8, 6, 13, 12, 5, 14, 15, 11, 2, 3, 7, 9, 0, 4, 10, 1],
+    # Canonical blob slot->case mapping lives in blob_layout.json (shared with
+    # generate_debug_tileset.lua) to keep both scripts in sync.
+    "blob": json.loads((SCRIPT_DIR / "blob_layout.json").read_text()),
     "binary": list(range(TILE_COUNT)),
 }
 
