@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Export debug runtime assets from grouped .aseprite sources.
 
-Debug tilesets are authored as animated 4x4 sheet frames where each sheet frame
-contains marching-square cases in row-major order:
-0..3 / 4..7 / 8..11 / 12..15.
+Debug tilesets are authored as animated 4x4 sheet frames.
+The source sheet layout can be configured:
+- blob: RPG Maker / blob-style rotational grouping (default)
+- binary: marching-squares row-major case IDs (legacy)
 
 The exporter slices each sheet frame into 16 tiles and writes atlas frames as:
-- <animation_id>#<tile_index>@<phase_index> (animated frames)
-- <animation_id>#<tile_index>            (phase-0 alias for compatibility)
+- <animation_id>#<case_id>@<phase_index> (animated frames)
+- <animation_id>#<case_id>               (phase-0 alias for compatibility)
 """
 
 from __future__ import annotations
@@ -43,6 +44,13 @@ SOURCE_CATEGORY_MAP = {
 TILE_COLUMNS = 4
 TILE_ROWS = 4
 TILE_COUNT = TILE_COLUMNS * TILE_ROWS
+
+SOURCE_LAYOUT_SLOT_TO_CASE = {
+    # Canonical blob slot->case mapping lives in blob_layout.json (shared with
+    # generate_debug_tileset.lua) to keep both scripts in sync.
+    "blob": json.loads((SCRIPT_DIR / "blob_layout.json").read_text()),
+    "binary": list(range(TILE_COUNT)),
+}
 
 
 @dataclass(frozen=True)
@@ -135,6 +143,16 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2,
         help="Padding between frames in atlas packing.",
+    )
+    parser.add_argument(
+        "--source-layout",
+        choices=sorted(SOURCE_LAYOUT_SLOT_TO_CASE.keys()),
+        default="blob",
+        help=(
+            "Case ordering in source 4x4 sheets: "
+            "'blob' (RPG Maker/autotile rotational grouping) or "
+            "'binary' (row-major case IDs)."
+        ),
     )
     parser.add_argument(
         "--write-frames",
@@ -242,6 +260,30 @@ def safe_name(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]+", "_", value)
 
 
+def resolve_slot_to_case(source_layout: str) -> list[int]:
+    slot_to_case = SOURCE_LAYOUT_SLOT_TO_CASE.get(source_layout)
+    if slot_to_case is None:
+        raise RuntimeError(f'Unknown --source-layout "{source_layout}"')
+
+    if len(slot_to_case) != TILE_COUNT:
+        raise RuntimeError(
+            f'Source layout "{source_layout}" must define exactly {TILE_COUNT} slots. '
+            f"Got {len(slot_to_case)}."
+        )
+
+    expected = set(range(TILE_COUNT))
+    actual = set(slot_to_case)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise RuntimeError(
+            f'Source layout "{source_layout}" must be a permutation of 0..{TILE_COUNT - 1}. '
+            f"missing={missing}, extra={extra}"
+        )
+
+    return slot_to_case
+
+
 def slice_sheet_frame(
     source_png: Path,
     destination_dir: Path,
@@ -294,6 +336,7 @@ def build_extracted_frames(
     aseprite_bin: str,
     extract_script: Path,
     temp_root: Path,
+    slot_to_case: list[int],
 ) -> tuple[
     dict[str, list[ExtractedFrame]],
     dict[str, AnimationBuild],
@@ -369,6 +412,11 @@ def build_extracted_frames(
                     animation_id=animation_id,
                     phase_index=phase_index,
                 )
+                if len(tile_paths) != TILE_COUNT:
+                    raise RuntimeError(
+                        f"Animation {animation_id} phase {phase_index} produced {len(tile_paths)} tiles; "
+                        f"expected {TILE_COUNT}."
+                    )
 
                 size_tuple = (tile_width, tile_height)
                 if expected_tile_size is None:
@@ -384,9 +432,10 @@ def build_extracted_frames(
                 preview_build.durations_ms.append(duration)
 
                 for tile_index, tile_path in enumerate(tile_paths):
-                    by_case[tile_index].append(tile_path)
+                    case_id = slot_to_case[tile_index]
+                    by_case[case_id].append(tile_path)
 
-                    base_name = f"{animation_id}#{tile_index}"
+                    base_name = f"{animation_id}#{case_id}"
                     phase_name = f"{base_name}@{phase_index}"
 
                     frames_by_category[atlas_category].append(
@@ -416,13 +465,14 @@ def build_extracted_frames(
                                 source_png=tile_path,
                             )
                         )
-                        animation_build.frame_names.append(base_name)
-
-            if len(animation_build.frame_names) != TILE_COUNT:
+            missing_cases = [case_id for case_id in range(TILE_COUNT) if not by_case[case_id]]
+            if missing_cases:
                 raise RuntimeError(
-                    f"Animation {animation_id} did not produce exactly {TILE_COUNT} base tiles. "
-                    f"Got {len(animation_build.frame_names)}"
+                    f"Animation {animation_id} is missing frames for case IDs: {missing_cases}"
                 )
+            animation_build.frame_names = [
+                f"{animation_id}#{case_id}" for case_id in range(TILE_COUNT)
+            ]
 
             animations[animation_id] = animation_build
             previews[animation_id] = preview_build
@@ -696,6 +746,7 @@ def main() -> int:
     if args.shape_padding < 0:
         raise RuntimeError("--shape-padding must be >= 0")
 
+    slot_to_case = resolve_slot_to_case(args.source_layout)
     aseprite_bin = resolve_aseprite_binary(args.aseprite_bin)
     grouped_sources = discover_grouped_sources(aseprite_root)
 
@@ -707,6 +758,7 @@ def main() -> int:
             aseprite_bin=aseprite_bin,
             extract_script=extract_script,
             temp_root=temp_root,
+            slot_to_case=slot_to_case,
         )
 
         atlas_rows: list[dict[str, Any]] = []
@@ -778,6 +830,7 @@ def main() -> int:
         f"groups={len(grouped_sources)}, "
         f"animations={len(animations)}, "
         f"frames={frame_total}, "
+        f"sourceLayout={args.source_layout}, "
         f"public={'no' if args.dry_run else 'yes'}, "
         f"framesWritten={frames_written}, "
         f"previewsWritten={previews_written}, "

@@ -7,6 +7,18 @@ local TILE_SIZE = 16
 local GRID = 4
 local SHEET_SIZE = TILE_SIZE * GRID
 local PHASES = 8
+local TILE_COUNT = GRID * GRID
+
+-- Slot -> logical marching case ID. Shared with export_from_aseprite.py;
+-- canonical values live in blob_layout.json (sibling to this script).
+local script_dir = app.fs.filePath(debug.getinfo(1, "S").source:sub(2))
+local layout_path = app.fs.joinPath(script_dir, "blob_layout.json")
+local layout_file = assert(io.open(layout_path, "r"), "Failed to open " .. layout_path)
+local layout_ok, BLOB_SLOT_TO_CASE = pcall(json.decode, layout_file:read("*a"))
+layout_file:close()
+if not layout_ok then
+  error("Failed to parse blob_layout.json: " .. tostring(BLOB_SLOT_TO_CASE))
+end
 
 local TWO_PI = math.pi * 2
 
@@ -52,13 +64,13 @@ local function bilinear(nw, ne, se, sw, u, v)
   return mix(top, bottom, v)
 end
 
-local function draw_tile(img, tile_index, phase)
-  local col = tile_index % GRID
-  local row = math.floor(tile_index / GRID)
+local function draw_tile(img, slot_index, case_id, phase)
+  local col = slot_index % GRID
+  local row = math.floor(slot_index / GRID)
   local ox = col * TILE_SIZE
   local oy = row * TILE_SIZE
 
-  local nw, ne, se, sw = corner_values(tile_index)
+  local nw, ne, se, sw = corner_values(case_id)
 
   for py = 0, TILE_SIZE - 1 do
     for px = 0, TILE_SIZE - 1 do
@@ -93,8 +105,12 @@ end
 
 local function draw_sheet(phase)
   local img = Image(SHEET_SIZE, SHEET_SIZE, ColorMode.RGB)
-  for tile_index = 0, 15 do
-    draw_tile(img, tile_index, phase)
+  for slot_index = 0, TILE_COUNT - 1 do
+    local case_id = BLOB_SLOT_TO_CASE[slot_index + 1]
+    if case_id == nil then
+      error("Missing BLOB_SLOT_TO_CASE entry for slot " .. tostring(slot_index))
+    end
+    draw_tile(img, slot_index, case_id, phase)
   end
   return img
 end
