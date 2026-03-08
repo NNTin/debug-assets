@@ -8,23 +8,49 @@ Placeholder asset package for early frontend integration and terrain iteration.
 - Timeline tag names are animation IDs
 - Each tag maps to a same-named layer
 
-## Marching Squares Placeholder
+## Wang Tileset (Marching Squares) Placeholder
 
 The debug environment source uses an animated sprite-sheet tag:
 
 - `tilesets.debug.environment.autotile-15`
 - Each timeline frame is a full 4x4 tileset sheet (8 phases)
-- Source sheet slot order is Blob/RPG Maker autotile layout:
-  - row 1: `8 6 13 12`
-  - row 2: `5 14 15 11`
-  - row 3: `2 3 7 9`
-  - row 4: `0 4 10 1`
+
+This layout is the Wang tileset convention (also commonly called Blob tileset or
+RPG Maker autotile layout).
+
+### Tile Numbering
+
+Case IDs use 4-bit corner masks:
+
+- `NW = 1`
+- `NE = 2`
+- `SE = 4`
+- `SW = 8`
+- `caseId = NW*1 + NE*2 + SE*4 + SW*8`
+
+Binary marching-squares row-major reference (case IDs):
+
+```text
+0  1  2  3
+4  5  6  7
+8  9  10 11
+12 13 14 15
+```
+
+Wang source-sheet slot order in `tileset.aseprite`:
+
+```text
+8  6  13 12
+5  14 15 11
+2  3  7  9
+0  4  10 1
+```
 
 Expected mapping strategy:
 
 - case `N` -> `tilesets.debug.environment.autotile-15#N`
 - animated variants are exported as `tilesets.debug.environment.autotile-15#N@phase`
-- runtime export still emits binary marching case IDs (`0..15`) regardless of source slot order
+- source `.aseprite` is authored in Wang slot order; runtime export remaps to binary case IDs (`0..15`)
 - canonical ruleset example: `aseprite/environment/tileset.marching-squares-15.json`
 
 ## Outputs
