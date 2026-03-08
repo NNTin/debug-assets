@@ -2,7 +2,7 @@
   "id": "debug-water-over-ground-15",
   "insideMaterial": "water",
   "outsideMaterial": "ground",
-  "notes": "caseId N maps to autotile-15 base frame #N. Animated variants are available as #N@phase.",
+  "notes": "Source sheet slots use Blob/RPG Maker ordering, but caseId N maps to autotile-15 base frame #N after export remap. Animated variants are available as #N@phase.",
   "rules": [
     { "caseId": 0, "frame": "tilesets.debug.environment.autotile-15#0" },
     { "caseId": 1, "frame": "tilesets.debug.environment.autotile-15#1" },

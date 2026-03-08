@@ -7,6 +7,16 @@ local TILE_SIZE = 16
 local GRID = 4
 local SHEET_SIZE = TILE_SIZE * GRID
 local PHASES = 8
+local TILE_COUNT = GRID * GRID
+
+-- Source-of-truth authoring layout: blob/RPG Maker rotational grouping.
+-- slot -> logical marching case id.
+local BLOB_SLOT_TO_CASE = {
+  8, 6, 13, 12,
+  5, 14, 15, 11,
+  2, 3, 7, 9,
+  0, 4, 10, 1,
+}
 
 local TWO_PI = math.pi * 2
 
@@ -52,13 +62,13 @@ local function bilinear(nw, ne, se, sw, u, v)
   return mix(top, bottom, v)
 end
 
-local function draw_tile(img, tile_index, phase)
-  local col = tile_index % GRID
-  local row = math.floor(tile_index / GRID)
+local function draw_tile(img, slot_index, case_id, phase)
+  local col = slot_index % GRID
+  local row = math.floor(slot_index / GRID)
   local ox = col * TILE_SIZE
   local oy = row * TILE_SIZE
 
-  local nw, ne, se, sw = corner_values(tile_index)
+  local nw, ne, se, sw = corner_values(case_id)
 
   for py = 0, TILE_SIZE - 1 do
     for px = 0, TILE_SIZE - 1 do
@@ -93,8 +103,12 @@ end
 
 local function draw_sheet(phase)
   local img = Image(SHEET_SIZE, SHEET_SIZE, ColorMode.RGB)
-  for tile_index = 0, 15 do
-    draw_tile(img, tile_index, phase)
+  for slot_index = 0, TILE_COUNT - 1 do
+    local case_id = BLOB_SLOT_TO_CASE[slot_index + 1]
+    if case_id == nil then
+      error("Missing BLOB_SLOT_TO_CASE entry for slot " .. tostring(slot_index))
+    end
+    draw_tile(img, slot_index, case_id, phase)
   end
   return img
 end
