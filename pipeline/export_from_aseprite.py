@@ -14,6 +14,7 @@ The exporter slices each sheet frame into 16 tiles and writes atlas frames as:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
@@ -30,6 +31,26 @@ from PIL import Image
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
+
+
+def load_aseprite_cli():
+    module_path = PACKAGE_ROOT / "aseprite_cli.py"
+    spec = importlib.util.spec_from_file_location(
+        f"{PACKAGE_ROOT.name.replace('-', '_')}_aseprite_cli",
+        module_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load aseprite_cli.py from {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+aseprite_cli = load_aseprite_cli()
+ASEPRITE_BIN_ENV_VAR = aseprite_cli.ASEPRITE_BIN_ENV_VAR
+configured_aseprite_bin = aseprite_cli.configured_aseprite_bin
+resolve_aseprite_binary = aseprite_cli.resolve_aseprite_binary
 
 NAMESPACE = "debug"
 CATEGORY_ORDER = ["tilesets"]
@@ -118,8 +139,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--aseprite-bin",
-        default="aseprite",
-        help="Aseprite binary name or full path.",
+        default=configured_aseprite_bin(),
+        help=(
+            "Aseprite binary name or full path. "
+            f'Defaults to ${ASEPRITE_BIN_ENV_VAR} or "aseprite".'
+        ),
     )
     parser.add_argument(
         "--extract-script",
@@ -189,22 +213,6 @@ def discover_grouped_sources(aseprite_root: Path) -> list[Path]:
     if not files:
         raise RuntimeError(f"No .aseprite files found under {aseprite_root}")
     return files
-
-
-def resolve_aseprite_binary(preferred: str) -> str:
-    resolved = shutil.which(preferred)
-    if resolved:
-        return resolved
-
-    candidate = Path(preferred)
-    if candidate.exists() and candidate.is_file():
-        return str(candidate)
-
-    fallback = Path("/home/nntin/git/aseprite/build/bin/aseprite")
-    if fallback.exists() and fallback.is_file():
-        return str(fallback)
-
-    raise RuntimeError(f'Could not resolve Aseprite binary from "{preferred}"')
 
 
 def map_source_category(relative_path: Path) -> str:
