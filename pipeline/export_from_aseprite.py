@@ -18,6 +18,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -30,6 +31,14 @@ from PIL import Image
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
+from aseprite_cli import (
+    ASEPRITE_BIN_ENV_VAR,
+    configured_aseprite_bin,
+    resolve_aseprite_binary,
+)
 
 NAMESPACE = "debug"
 CATEGORY_ORDER = ["tilesets"]
@@ -118,8 +127,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--aseprite-bin",
-        default="aseprite",
-        help="Aseprite binary name or full path.",
+        default=configured_aseprite_bin(),
+        help=(
+            "Aseprite binary name or full path. "
+            f'Defaults to ${ASEPRITE_BIN_ENV_VAR} or "aseprite".'
+        ),
     )
     parser.add_argument(
         "--extract-script",
@@ -189,24 +201,6 @@ def discover_grouped_sources(aseprite_root: Path) -> list[Path]:
     if not files:
         raise RuntimeError(f"No .aseprite files found under {aseprite_root}")
     return files
-
-
-def resolve_aseprite_binary(preferred: str) -> str:
-    resolved = shutil.which(preferred)
-    if resolved:
-        return resolved
-
-    candidate = Path(preferred)
-    if candidate.exists() and candidate.is_file():
-        return str(candidate)
-
-    fallback = Path("/home/nntin/git/aseprite/build/bin/aseprite")
-    if fallback.exists() and fallback.is_file():
-        return str(fallback)
-
-    raise RuntimeError(f'Could not resolve Aseprite binary from "{preferred}"')
-
-
 def map_source_category(relative_path: Path) -> str:
     if not relative_path.parts:
         raise RuntimeError(f"Invalid grouped source path: {relative_path}")
