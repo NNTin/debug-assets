@@ -5,6 +5,7 @@
   "description": "Debug placeholder asset package with marching-squares-compatible 15-tile tileset",
   "scripts": {
     "export:dry": "python3 pipeline/export_from_aseprite.py --dry-run",
+    "export:clean": "python3 pipeline/export_clean_from_aseprite.py",
     "export:public": "python3 pipeline/export_from_aseprite.py",
     "export:all": "python3 pipeline/export_from_aseprite.py --write-previews --write-frames"
   }
