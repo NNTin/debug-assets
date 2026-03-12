@@ -121,7 +121,8 @@ for frame_index = 2, PHASES do
 end
 
 for _, frame in ipairs(sprite.frames) do
-  frame.duration = 120
+  -- Aseprite's Lua API exposes frame.duration in seconds.
+  frame.duration = 120 / 1000
 end
 
 local layer = sprite:newLayer()

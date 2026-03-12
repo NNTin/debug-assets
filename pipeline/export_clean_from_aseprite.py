@@ -159,23 +159,21 @@ def main() -> int:
         for animation_id in sorted(animations.keys()):
             animation = animations[animation_id]
             category = category_by_atlas_key.get(animation.atlas_key)
-            preview = previews[animation_id]
-            frame_size: dict[str, int] | None = None
-            if animation.frame_names:
-                first_frame = atlas_frames.get(animation.frame_names[0])
-                if first_frame:
-                    frame_size = dict(first_frame["size"])
             animation_rows[animation_id] = {
                 "atlasKey": animation.atlas_key,
                 "frames": list(animation.frame_names),
-                "phaseDurationsMs": list(preview.durations_ms),
+                "durationsMs": list(animation.durations_ms),
+                "phaseDurationsMs": list(animation.phase_durations_ms),
                 "frameCount": len(animation.frame_names),
+                "frameSize": {
+                    "w": animation.frame_width,
+                    "h": animation.frame_height,
+                },
+                "sourceFile": animation.source_file,
                 "sourceLayout": args.source_layout,
             }
             if category:
                 animation_rows[animation_id]["category"] = category
-            if frame_size is not None:
-                animation_rows[animation_id]["frameSize"] = frame_size
 
         manifest = {
             "schemaVersion": 1,

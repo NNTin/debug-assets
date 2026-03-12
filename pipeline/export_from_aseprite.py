@@ -95,8 +95,14 @@ class AtlasPlacement:
 
 @dataclass
 class AnimationBuild:
+    atlas_category: str
     atlas_key: str
+    source_file: str
     frame_names: list[str]
+    durations_ms: list[int]
+    phase_durations_ms: list[int]
+    frame_width: int
+    frame_height: int
 
 
 @dataclass
@@ -367,6 +373,7 @@ def build_extracted_frames(
         safe_stem = source_stem.replace("/", "__")
         extract_dir = temp_root / safe_stem
         manifest_path = extract_dir / "manifest.json"
+        source_file_path = (Path("aseprite") / relative_source).as_posix()
 
         manifest = run_group_extraction(
             aseprite_bin=aseprite_bin,
@@ -390,7 +397,6 @@ def build_extracted_frames(
             if animation_id in animations:
                 raise RuntimeError(f"Duplicate animation id across grouped sources: {animation_id}")
 
-            animation_build = AnimationBuild(atlas_key=atlas_key, frame_names=[])
             preview_build = PreviewBuild(animation_id=animation_id, frame_paths=[], durations_ms=[])
             by_case: dict[int, list[Path]] = {index: [] for index in range(TILE_COUNT)}
 
@@ -398,14 +404,16 @@ def build_extracted_frames(
 
             for phase_index, frame in enumerate(tag_frames):
                 frame_file = frame.get("file")
-                duration = frame.get("duration", 100)
+                duration = frame.get("durationMs")
 
                 if not isinstance(frame_file, str):
                     raise RuntimeError(
                         f"Invalid frame file for animation {animation_id} in {source_file}"
                     )
                 if not isinstance(duration, int) or duration < 1:
-                    duration = 100
+                    raise RuntimeError(
+                        f"Invalid frame durationMs for animation {animation_id} in {source_file}"
+                    )
 
                 source_png = extract_dir / frame_file
                 if not source_png.exists():
@@ -478,11 +486,30 @@ def build_extracted_frames(
                 raise RuntimeError(
                     f"Animation {animation_id} is missing frames for case IDs: {missing_cases}"
                 )
-            animation_build.frame_names = [
-                f"{animation_id}#{case_id}" for case_id in range(TILE_COUNT)
-            ]
+            if expected_tile_size is None:
+                raise RuntimeError(
+                    f"Animation {animation_id} did not produce any sliced frames in {source_file}"
+                )
 
-            animations[animation_id] = animation_build
+            tile_width, tile_height = expected_tile_size
+            phase_durations_ms = list(preview_build.durations_ms)
+            if not phase_durations_ms:
+                raise RuntimeError(
+                    f"Animation {animation_id} did not produce any phase durations in {source_file}"
+                )
+
+            # Base frame aliases (`animation#case`) always point at phase 0.
+            base_frame_duration_ms = phase_durations_ms[0]
+            animations[animation_id] = AnimationBuild(
+                atlas_category=atlas_category,
+                atlas_key=atlas_key,
+                source_file=source_file_path,
+                frame_names=[f"{animation_id}#{case_id}" for case_id in range(TILE_COUNT)],
+                durations_ms=[base_frame_duration_ms for _ in range(TILE_COUNT)],
+                phase_durations_ms=phase_durations_ms,
+                frame_width=tile_width,
+                frame_height=tile_height,
+            )
             previews[animation_id] = preview_build
             case_phase_frames[animation_id] = by_case
 
@@ -628,7 +655,16 @@ def write_animations_json(public_root: Path, animations: dict[str, AnimationBuil
         animation = animations[animation_id]
         ordered[animation_id] = {
             "atlasKey": animation.atlas_key,
+            "category": animation.atlas_category,
             "frames": animation.frame_names,
+            "durationsMs": animation.durations_ms,
+            "phaseDurationsMs": animation.phase_durations_ms,
+            "frameCount": len(animation.frame_names),
+            "frameSize": {
+                "w": animation.frame_width,
+                "h": animation.frame_height,
+            },
+            "sourceFile": animation.source_file,
         }
 
     write_json(

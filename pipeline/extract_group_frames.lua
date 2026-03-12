@@ -14,6 +14,19 @@ if not sprite then
   error("No active sprite. Pass a .aseprite file before --script.")
 end
 
+local function duration_ms(frame)
+  local duration_seconds = tonumber(frame.duration)
+  if not duration_seconds then
+    error("Frame duration is missing or invalid")
+  end
+
+  local milliseconds = math.floor(duration_seconds * 1000 + 0.5)
+  if milliseconds < 1 then
+    error("Frame duration must be positive")
+  end
+  return milliseconds
+end
+
 local function read_only_layer(layer)
   return layer.isGroup
 end
@@ -59,7 +72,7 @@ for tag_index, tag in ipairs(sprite.tags) do
     table.insert(frames, {
       index = out_index,
       sourceFrame = frame_number - 1,
-      duration = frame.duration,
+      durationMs = duration_ms(frame),
       file = filename,
       width = cel.image.width,
       height = cel.image.height,
